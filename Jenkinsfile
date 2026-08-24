@@ -1,6 +1,18 @@
 pipeline {
   agent any
 
+  parameters {
+
+    choice(
+      name: 'TARGET',
+      choices: [
+        'linux_servers',
+        "server01"
+        ],
+      description: 'Select Linux Servers/group to patch'
+      )
+  }
+
   environment {
         ANSIBLE_HOST = '10.0.10.10'
         ANSIBLE_USER = 'itadmin'
