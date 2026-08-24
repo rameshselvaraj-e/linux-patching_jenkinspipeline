@@ -53,7 +53,7 @@ pipeline {
 
             steps {
 
-                sshagent(credentials: ['ansible-vm-ssh']) {
+                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
 
                     sh """
 
