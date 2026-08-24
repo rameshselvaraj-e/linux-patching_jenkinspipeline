@@ -1,0 +1,139 @@
+---
+# ============================================================
+# PATCH LINUX PLAYBOOK
+# Applies security and package updates to Ubuntu and RedHat.
+# ============================================================
+- name: "PATCH | Apply system updates"
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+  serial: "{{ serial_batch | default(1) }}"
+  gather_facts: true
+  
+  pre_tasks:
+    # =========================================================
+    # DIsplay Server Information
+    # =========================================================
+    - name: DIsplay Server Information
+      ansible.builtin.debug:
+        msg:
+          - "Hostname: {{ ansible_hostname }}"
+          - "OS: {{ ansible_distribution }}"
+          - "Version: {{ ansible_distribution_version }}"
+          - "KERNEL: {{ ansible_kernel }}"
+
+  tasks:
+    # ==========================================================
+    # UBUNTU / DEBIAN PATCHING
+    # ==========================================================
+    - name: "UBUNTU | Update apt repo and cache"
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "UBUNTU | Upgrade all packages (safe upgrade)"
+      apt:
+        name: "*"
+        state: latest
+        autoremove: "{{ ubuntu_autoremove | default(true) }}"
+      when:
+        - ansible_facts['os_family'] == "Debian"
+      register: ubuntu_upgrade_result
+ 
+    # ==========================================================
+    # REDHAT PATCHING
+    # ==========================================================
+    - name: Upgrade all system packages via DNF (RedHat)
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: yes
+      when: ansible_facts['os_family'] == "RedHat"
+
+    # ==========================================================
+    # REBOOT DETECTION
+    # ==========================================================
+    - name: "UBUNTU | Check if reboot is required"
+      stat:
+        path: /var/run/reboot-required
+      register: ubuntu_reboot_file
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Check RHEL reboot requirement
+      ansible.builtin.command:
+        cmd: needs-restarting -r
+      register: rhel_reboot
+      failed_when: false
+      changed_when: false
+      when: ansible_facts.os_family == "RedHat"
+
+    # ==========================================================
+    # REBOOT
+    # ==========================================================
+    - name: Reboot Debian server if required
+      ansible.builtin.reboot:
+        msg: "Ansible initiated reboot after Linux patching"
+        reboot_timeout: 900
+        connect_timeout: 10
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+      when:
+        - ansible_facts.os_family == "Debian"
+        - debian_reboot.stat.exists | default(false)
+
+    - name: Reboot RHEL server if required
+      ansible.builtin.reboot:
+        msg: "Ansible initiated reboot after Linux patching"
+        reboot_timeout: 900
+        connect_timeout: 10
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+      when:
+        - ansible_facts.os_family == "RedHat"
+        - rhel_reboot.rc | default(0) == 1
+
+  post_tasks:
+    # ==================================================
+    # POST-CHECK 1 - Connectivity
+    # ==================================================
+    - name: Verify server connectivity after patching
+      ansible.builtin.ping:
+
+    # ==================================================
+    # POST-CHECK 2 - Kernel
+    # ==================================================
+    - name: Get kernel after patching
+      ansible.builtin.command: uname -r
+      register: kernel_after
+      changed_when: false
+
+    # ==================================================
+    # POST-CHECK 3 - Uptime
+    # ==================================================
+    - name: Get uptime after patching
+      ansible.builtin.command: uptime
+      register: uptime_after
+      changed_when: false
+
+    # ==================================================
+    # POST-CHECK 4 - Disk
+    # ==================================================
+    - name: Check disk after patching
+      ansible.builtin.shell: df -h /
+      register: disk_after
+      changed_when: false
+
+    # ==================================================
+    # FINAL RESULT
+    # ==================================================
+    - name: Display patching result
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "PATCHING SUCCESSFUL"
+          - "SERVER: {{ inventory_hostname }}"
+          - "KERNEL: {{ kernel_after.stdout }}"
+          - "UPTIME: {{ uptime_after.stdout }}"
+          - "=========================================="
+
+

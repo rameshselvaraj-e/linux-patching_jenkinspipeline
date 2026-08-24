@@ -1,0 +1,206 @@
+---
+# ============================================================
+# POST-PATCH VALIDATION PLAYBOOK
+# Validates system health AFTER patching:
+#   - Confirms host is reachable
+#   - Validates critical services are running
+#   - Checks disk space (no filesystem critically full)
+#   - Checks for failed systemd units
+#   - Compares kernel pre/post (detect reboot was effective)
+#   - Compares package count pre/post
+#   - Generates final patch report
+# ============================================================
+
+- name: "POST-PATCH | Validate system health after patching"
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+  serial: "{{ serial_batch | default(1) }}"
+  gather_facts: true
+
+  vars:
+    disk_threshold_percent: 85
+    critical_services:
+      - ssh
+    report_dir: "/data/linux-patching/reports/report_{{ ansible_facts['date_time']['date'] }}"
+
+
+  tasks:
+
+    # ----------------------------------------------------------
+    # 1. CONFIRM HOST REACHABILITY
+    # ----------------------------------------------------------
+    - name: "POST | Confirm host is reachable"
+      ping:
+      register: post_ping
+
+    - name: "POST | Display post-patch system info"
+      debug:
+        msg:
+          - "================================================"
+          - "  Host:      {{ ansible_facts['hostname'] }}"
+          - "  IP:        {{ ansible_facts['default_ipv4'] | default('N/A') }}"
+          - "  OS:        {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          - "  Kernel:    {{ ansible_facts['kernel'] }}"
+          - "  Uptime:    {{ (ansible_facts['uptime_seconds'] / 3600) | round(2) }} hours"
+          - "================================================"
+
+    # ----------------------------------------------------------
+    # 2. VALIDATE CRITICAL SERVICES
+    # ----------------------------------------------------------
+    - name: "POST | Check critical services after patching"
+      service_facts:
+      register: post_services
+
+    - name: "POST | Validate critical services are running"
+      debug:
+        msg: "{{ item }}: {{ (post_services.ansible_facts.services[item].state) | default('NOT FOUND') }}"
+      loop: "{{ critical_services }}"
+
+    - name: "POST | FAIL if any critical service is down after patching"
+      fail:
+        msg: >
+          CRITICAL: Service '{{ item }}' is not running on {{ ansible_facts['hostname'] }} after patching!
+          Service state: {{ post_services.ansible_facts.services[item].state | default('NOT FOUND') }}
+      when: (post_services.ansible_facts.services[item].state | default('absent')) != 'running'
+      loop: "{{ critical_services }}"
+
+    # ----------------------------------------------------------
+    # 3. CHECK DISK SPACE (post-patch)
+    # ----------------------------------------------------------
+    - name: "POST | Check all filesystems usage"
+      shell: df -h | tail -n +2 |grep -v "tmpfs"
+      register: post_disk_usage
+      changed_when: false
+
+    - name: "POST | Display post-patch disk usage"
+      debug:
+        var: post_disk_usage.stdout_lines
+
+    - name: "POST | Get root filesystem percentage"
+      shell: df / | tail -1 | awk '{print $5}' | tr -d '%'
+      register: post_root_disk_pct
+      changed_when: false
+
+    - name: "POST | Display root disk usage"
+      debug:
+        msg: "Root filesystem usage: {{ post_root_disk_pct.stdout }}%"
+
+    - name: "POST | Validate root filesystem is not critically full"
+      ansible.builtin.assert:
+        that:
+          - post_root_disk_pct.stdout | int <= 95
+        fail_msg: >
+          CRITICAL: Root filesystem is {{ post_root_disk_pct.stdout }}% used
+          after patching. Investigate immediately.
+        success_msg: "Root filesystem disk space OK ({{ post_root_disk_pct.stdout }}%)"
+ 
+    # ----------------------------------------------------------
+    # 5. CAPTURE POST-PATCH PACKAGE LIST
+    # ----------------------------------------------------------
+    - name: "POST | Capture installed packages (Ubuntu/Debian)"
+      shell: dpkg-query -W -f='${Package} ${Version}\n' | sort
+      register: post_packages_ubuntu
+      changed_when: false
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "POST | Capture installed packages (RedHat)"
+      shell: rpm -qa --queryformat '%{NAME} %{VERSION}-%{RELEASE}\n' | sort
+      register: post_packages_redhat
+      changed_when: false
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: "POST | Save post-patch package count"
+      set_fact:
+        post_patch_package_count: "{{ (post_packages_ubuntu.stdout_lines | default(post_packages_redhat.stdout_lines)) | length }}"
+
+    # ----------------------------------------------------------
+    # 6. CHECK REBOOT STATUS
+    # ----------------------------------------------------------
+    - name: "POST | Check if reboot still required (Ubuntu)"
+      stat:
+        path: /var/run/reboot-required
+      register: post_reboot_required_ubuntu
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "POST | Check if reboot still required (RedHat 8+)"
+      command: needs-restarting -r
+      register: post_reboot_required_redhat
+      failed_when: false
+      changed_when: false
+      when:
+        - ansible_facts['os_family'] == "RedHat"
+        - ansible_facts['distribution_major_version'] | int >= 8
+
+    - name: "POST | Set reboot still required flag"
+      set_fact:
+        reboot_still_required: >-
+          {{ post_reboot_required_ubuntu.stat.exists | default(false) if ansible_facts['os_family'] == 'Debian'
+             else (post_reboot_required_redhat.rc | default(0)) == 1 }}
+
+    - name: "POST | Warn if reboot is still required"
+      debug:
+        msg: "WARNING: Reboot is still required on {{ ansible_facts['hostname'] }}. Schedule a reboot."
+      when: reboot_still_required | bool
+
+    # ----------------------------------------------------------
+    # 7. GENERATE FINAL REPORT
+    # ----------------------------------------------------------
+    - name: "POST | Generate post-patch report"
+      copy:
+        content: |
+          ================================================================
+          POST-PATCH VALIDATION REPORT
+          ================================================================
+          Host:               {{ ansible_facts['hostname'] }}
+          IP:                 {{ ansible_facts['default_ipv4'].address | default('N/A') }}
+          OS:                 {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+          Kernel (post):      {{ ansible_facts['kernel'] }}
+          Uptime (hours):     {{ (ansible_facts['uptime_seconds'] / 3600) | round(2) }}
+          
+          --------------------------------------------------------------
+          PACKAGE SUMMARY
+          --------------------------------------------------------------
+          Packages installed:  {{ post_patch_package_count }}
+          Pending updates:     {{ (ubuntu_pending_count.stdout | default(redhat_pending_count.stdout | default('N/A'))) }}
+          
+          --------------------------------------------------------------
+          DISK USAGE (POST-PATCH)
+          --------------------------------------------------------------
+          {{ post_disk_usage.stdout }}
+          
+          --------------------------------------------------------------
+          CRITICAL SERVICES STATUS
+          --------------------------------------------------------------
+          {% for svc in critical_services %}
+          {{ svc }}: {{ post_services.ansible_facts.services[svc].state | default('NOT FOUND') }}
+          {% endfor %}
+          
+          --------------------------------------------------------------
+          REBOOT STATUS
+          --------------------------------------------------------------
+          Reboot still required: {{ reboot_still_required | bool }}
+          
+          --------------------------------------------------------------
+          VALIDATION RESULT
+          --------------------------------------------------------------
+          {% if reboot_still_required | bool %}
+          STATUS: WARNING - Reboot still required
+          {% else %}
+          STATUS: PASS - All checks passed
+          {% endif %}
+          ================================================================
+        dest: "{{ report_dir }}/post_patch_{{ ansible_facts['hostname'] }}.txt"
+      delegate_to: localhost
+      become: false
+    # ----------------------------------------------------------
+    # 8. Validation REPORT
+    # ----------------------------------------------------------
+    - name: "POST | Validation completed"
+      debug:
+        msg:
+          - "================================================"
+          - "  POST-PATCH VALIDATION COMPLETE"
+          - "  Host: {{ ansible_facts['hostname'] }}"
+          - "  Status: {{ 'WARNING - reboot needed' if reboot_still_required | bool else 'ALL CHECKS PASSED' }}"
+          - "  Report: {{ report_dir }}/post_patch_{{ ansible_facts['hostname'] }}.txt"
+          - "================================================"

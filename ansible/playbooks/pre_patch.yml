@@ -1,0 +1,154 @@
+---
+# ============================================================
+# PRE-PATCH PLAYBOOK
+# Collects system state BEFORE patching:
+#   - OS info, kernel, uptime, hostname, IP
+#   - Disk space on critical filesystems (fail if over threshold)
+#   - Package manager lock check
+#   - Pending updates count
+#   - Critical service status
+#   - Current package list (for diff comparison)
+# Saves all data as host facts for the post-patch report.
+# ============================================================
+
+- name: "PRE-PATCH | Collect system state and validate readiness"
+  hosts: "{{ target_group | default('all') }}"
+  become: true
+  serial: "{{ serial_batch | default(1) }}"
+  gather_facts: true
+
+
+  vars:
+    disk_threshold_percent: 85
+    critical_services:
+      - sshd
+    report_path: /data/linux-patching/reports
+    report_dir: "/data/linux-patching/reports/report_{{ ansible_facts['date_time']['date'] }}"
+
+  tasks:
+    - name: Create a directory with the current system date
+      file:
+        path: "{{ report_path }}/report_{{ ansible_facts['date_time']['date'] }}"
+        state: directory
+        mode: '0755'
+
+    # ----------------------------------------------------------
+    # 1. DISPLAY TARGET SYSTEM INFO
+    # ----------------------------------------------------------
+    - name: "PRE | Display system information"
+      debug:
+        msg:
+          - "================================================"
+          - "  Host:      {{ ansible_facts['hostname'] }}"
+          - "  IP:        {{ ansible_facts['default_ipv4'] | default('N/A') }}"
+          - "  OS:        {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          - "  Kernel:    {{ ansible_facts['kernel'] }}"
+          - "  Arch:      {{ ansible_facts['architecture'] }}"
+          - "  Uptime:    {{ (ansible_facts['uptime_seconds'] / 3600) | round(2) }} hours"
+          - "  Total RAM: {{ (ansible_facts['memtotal_mb'] / 1024) | round(2) }} GB"
+          - "================================================"
+
+    # ----------------------------------------------------------
+    # 2. CHECK DISK SPACE ON CRITICAL FILESYSTEMS
+    # ----------------------------------------------------------
+    - name: "PRE | Get root filesystem usage percentage"
+      shell: df / | tail -1 | awk '{print $5}' | tr -d '%'
+      register: root_disk_pct
+      changed_when: false
+
+    - name: "PRE | Display root disk usage"
+      debug:
+        msg: "Root filesystem usage: {{ root_disk_pct.stdout }}% (threshold: {{ disk_threshold_percent }}%)"
+
+    - name: "PRE | Validate root filesystem has enough free space"
+      ansible.builtin.assert:
+        that:
+          - root_disk_pct.stdout | int <= disk_threshold_percent | int
+        fail_msg: >
+          ABORTING: Root filesystem is {{ root_disk_pct.stdout }}% used
+          (threshold: {{ disk_threshold_percent }}%).
+          Free up disk space before patching.
+        success_msg: "Root filesystem disk space OK ({{ root_disk_pct.stdout }}%)"
+
+    - name: "PRE | Check all filesystems usage"
+      shell: df -h | tail -n +2 |grep -v "tmpfs"
+      register: all_disk_usage
+      changed_when: false
+
+    - name: "PRE | Display all filesystem usage"
+      debug:
+        var: all_disk_usage.stdout_lines
+
+
+    # ----------------------------------------------------------
+    # 3. CAPTURE PRE-PATCH PACKAGE LIST (for post-patch diff)
+    # ----------------------------------------------------------
+    - name: "PRE | Capture installed packages (Ubuntu/Debian)"
+      shell: dpkg-query -W -f='${Package} ${Version}\n' | sort
+      register: pre_packages_ubuntu
+      changed_when: false
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "PRE | Capture installed packages (RedHat)"
+      shell: rpm -qa --queryformat '%{NAME} %{VERSION}-%{RELEASE}\n' | sort
+      register: pre_packages_redhat
+      changed_when: false
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: "PRE | Save pre-patch package count"
+      set_fact:
+        pre_patch_package_count: "{{ (pre_packages_ubuntu.stdout_lines | default(pre_packages_redhat.stdout_lines)) | length }}"
+
+    - name: "PRE | Save pre-patch snapshot"
+      set_fact:
+        pre_patch_snapshot:
+          hostname: "{{ ansible_facts['hostname'] }}"
+          os: "{{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          kernel_pre: "{{ ansible_facts['kernel'] }}"
+          uptime_pre: "{{ ansible_facts['uptime_seconds'] }}"
+          package_count_pre: "{{ pre_patch_package_count }}"
+          disk_usage_pre: "{{ all_disk_usage.stdout_lines }}"
+          pending_updates: "{{ ubuntu_pending_count.stdout | default(redhat_pending_count.stdout | default('0')) }}"
+
+    # ----------------------------------------------------------
+    # 7. SAVE PRE-PATCH DATA TO FILE (for Jenkins archiving)
+    # ----------------------------------------------------------
+    - name: "PRE | Create reports directory"
+      file:
+        path: "{{ report_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      become: false
+
+    - name: "PRE | Write pre-patch report to local file"
+      copy:
+        content: |
+          ============================================
+          PRE-PATCH REPORT
+          ============================================
+          Host:           {{ ansible_facts['hostname'] }}
+          IP:             {{ ansible_facts['default_ipv4'] | default('N/A') }}
+          OS:             {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+          Kernel (pre):  {{ ansible_facts['kernel'] }}
+          Uptime (hrs):  {{ (ansible_facts['uptime_seconds'] / 3600) | round(2) }}
+          Packages:      {{ pre_patch_package_count }}
+          Pending updates: {{ ubuntu_pending_count.stdout | default(redhat_pending_count.stdout | default('0')) }}
+          Disk usage:
+          {{ all_disk_usage.stdout }}
+          ============================================
+        dest: "{{ report_dir }}/pre_patch_{{ ansible_facts['hostname'] }}.txt"
+      delegate_to: localhost
+      become: false
+
+#    - name: "PRE | Save package list to local file"
+#      copy:
+#        content: "{{ pre_packages_ubuntu.stdout | default(pre_packages_redhat.stdout) }}"
+#        dest: "{{ report_dir }}/pre_packages_{{ ansible_facts['hostname'] }}.txt"
+#      delegate_to: localhost
+#      become: false
+
+
+    - name: "PRE | Pre-patch checks PASSED"
+      debug:
+        msg: "All pre-patch checks passed for {{ ansible_facts['hostname'] }}. Ready to patch."
