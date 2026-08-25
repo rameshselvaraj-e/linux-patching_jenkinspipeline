@@ -230,4 +230,4 @@ pipeline {
             echo "Ansible VM: ${ANSIBLE_HOST}"
         }
     }
-
+}
