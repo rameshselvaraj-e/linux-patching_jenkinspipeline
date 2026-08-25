@@ -28,10 +28,10 @@ pipeline {
         stage('Git Checkout') {
 
             steps {
-
-                checkout scm
-
-                sh '''
+              git branch: 'main', url: 'https://github.com/rameshselvaraj-e/linux-patching_jenkinspipeline.git'
+    
+            }
+               sh '''
                     echo "======================================"
                     echo "Git checkout completed"
                     echo "======================================"
