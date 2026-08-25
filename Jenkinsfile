@@ -63,7 +63,7 @@ pipeline {
 
                    scp \
                         -o StrictHostKeyChecking=no \
-                        -r ./ansible/* ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
+                        -r ./ansible ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
                     """
                 }
             }
