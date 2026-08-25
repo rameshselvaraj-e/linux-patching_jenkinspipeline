@@ -49,7 +49,7 @@ pipeline {
         // 2. COPY CODE TO ANSIBLE VM
         // ==============================================
 
-        stage('Deploy Ansible Code') {
+        stage('Copy Playbook to Ansible Server') {
 
            steps {
 
@@ -57,15 +57,13 @@ pipeline {
 
                 sh """
                   ssh \
-                     -o StrictHostKeyChecking=no \
+                       -o StrictHostKeyChecking=no \
                          ${ANSIBLE_USER}@${ANSIBLE_HOST} \
                          "mkdir -p ${REMOTE_DIR}"
 
-                       rsync -av \
-                         --delete \
-                         --exclude='.git' \
-                         ./ \
-                         ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
+                   scp \
+                        -o StrictHostKeyChecking=no \
+                        -r ./playbooks/* ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
                     """
                 }
             }
