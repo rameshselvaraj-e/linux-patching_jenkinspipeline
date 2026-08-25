@@ -16,7 +16,7 @@ pipeline {
   environment {
         ANSIBLE_HOST = '10.0.10.10'
         ANSIBLE_USER = 'itadmin'
-        REMOTE_DIR = '/data/linux-patching_pipeline'
+        REMOTE_DIR = '/data/linux-patching_jenkinspipeline'
     }
 
   stages {
