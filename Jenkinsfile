@@ -7,7 +7,7 @@ pipeline {
       name: 'TARGET',
       choices: [
         'linux_servers',
-        "server01"
+        'server01'
         ],
       description: 'Select Linux Servers/group to patch'
       )
@@ -43,6 +43,7 @@ pipeline {
                 '''
             }
         }
+  }
   
         // ==============================================
         // 2. COPY CODE TO ANSIBLE VM
@@ -204,30 +205,30 @@ pipeline {
     //        }
     //    }
     
-    post {
+    //post {
 
-        success {
+       // success {
 
-            echo '''
-            ==========================================
-            LINUX PATCHING SUCCESSFUL
-            ==========================================
-            '''
-        }
+        //    echo '''
+       //     ==========================================
+      //      LINUX PATCHING SUCCESSFUL
+      //      ==========================================
+       //     '''
+     //   }
 
-        failure {
+     //   failure {
 
-            echo '''
-            ==========================================
-            LINUX PATCHING FAILED
-            ==========================================
-            '''
-        }
+    //        echo '''
+    //        ==========================================
+   //         LINUX PATCHING FAILED
+   //         ==========================================
+   //         '''
+  //      }
+//
+  //      always {
 
-        always {
-
-            echo "Target: ${TARGET}"
-            echo "Ansible VM: ${ANSIBLE_HOST}"
-        }
-    }
-}
+  //          echo "Target: ${TARGET}"
+  //          echo "Ansible VM: ${ANSIBLE_HOST}"
+   //     }
+ //   }
+//}
