@@ -29,8 +29,7 @@ pipeline {
 
             steps {
               git branch: 'main', url: 'https://github.com/rameshselvaraj-e/linux-patching_jenkinspipeline.git'
-    
-            }
+            
                sh '''
                     echo "======================================"
                     echo "Git checkout completed"
@@ -231,4 +230,4 @@ pipeline {
             echo "Ansible VM: ${ANSIBLE_HOST}"
         }
     }
-}
+
