@@ -96,12 +96,10 @@ pipeline {
         }
 
         // ==============================================
-        // 3. ANSIBLE SYNTAX CHECK
+        // 3. ANSIBLE SYNTAX CHECK FOR PATCH
         // ==============================================
 
-        stage('Ansible Syntax Check') {
-
-            steps {
+           steps {
 
                 sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
 
@@ -118,10 +116,7 @@ pipeline {
                     """
                 }
             }
-        }
-
-
-
+        
         // ==============================================
         // 4. PRE-CHECK
         // ==============================================
