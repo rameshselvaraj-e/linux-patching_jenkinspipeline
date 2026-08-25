@@ -1,25 +1,35 @@
 pipeline {
-  agent any
 
-  parameters {
+    agent any
 
-    choice(
-      name: 'TARGET',
-      choices: [
-        'linux_servers',
-        'server01'
-        ],
-      description: 'Select Linux Servers/group to patch'
-      )
-  }
+    parameters {
 
-  environment {
-        ANSIBLE_HOST = '10.0.10.10'
-        ANSIBLE_USER = 'itadmin'
-        REMOTE_DIR = '/data/linux-patching_jenkinspipeline1'
+        choice(
+            name: 'TARGET',
+            choices: [
+                'linux_servers',
+                'server01',
+                'server02'
+            ],
+            description: 'Select Linux servers/group to patch'
+        )
+
+        booleanParam(
+            name: 'PRODUCTION_APPROVAL',
+            defaultValue: true,
+            description: 'Require manual approval before patching'
+        )
     }
 
-  stages {
+    environment {
+
+        ANSIBLE_HOST = '10.10.10.20'
+        ANSIBLE_USER = 'ansible'
+
+        REMOTE_DIR = '/opt/ansible/linux-patching'
+    }
+
+    stages {
 
         // ==============================================
         // 1. GITHUB CHECKOUT
@@ -28,9 +38,10 @@ pipeline {
         stage('Git Checkout') {
 
             steps {
-              git branch: 'main', url: 'https://github.com/rameshselvaraj-e/linux-patching_jenkinspipeline.git'
-            
-               sh '''
+
+                checkout scm
+
+                sh '''
                     echo "======================================"
                     echo "Git checkout completed"
                     echo "======================================"
@@ -43,192 +54,161 @@ pipeline {
                 '''
             }
         }
-  }
-  
+
+
         // ==============================================
         // 2. COPY CODE TO ANSIBLE VM
         // ==============================================
 
-        //stage('Copy Playbook to Ansible Server') {
+        stage('Deploy Ansible Code') {
 
-          // steps {
+            steps {
 
-             // sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+                sshagent(credentials: ['ansible-vm-ssh']) {
 
-              //  sh """
-               //   ssh \
-               //        -o StrictHostKeyChecking=no \
-              //           ${ANSIBLE_USER}@${ANSIBLE_HOST} \
-             //            "mkdir -p ${REMOTE_DIR}"
+                    sh """
 
-              //     scp \
-              //          -o StrictHostKeyChecking=no \
-               //         -r ./ansible ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
-              //      """
-             //   }
-         //   }
-     //   }
+                        ssh \
+                          -o StrictHostKeyChecking=no \
+                          ${ANSIBLE_USER}@${ANSIBLE_HOST} \
+                          "mkdir -p ${REMOTE_DIR}"
+
+                        rsync -av \
+                          --delete \
+                          --exclude='.git' \
+                          ./ \
+                          ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
+                    """
+                }
+            }
+        }
 
 
-         // ==============================================
-        // 3. ANSIBLE SYNTAX CHECK FOR PRE PATCH
+        // ==============================================
+        // 3. ANSIBLE SYNTAX CHECK
         // ==============================================
 
-     //   stage('Ansible Syntax Check') {
+        stage('Ansible Syntax Check') {
 
-      //      steps {
+            steps {
 
-       //         sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
-//
-        //            sh """
+                sshagent(credentials: ['ansible-vm-ssh']) {
 
-          //              ssh \
-          //                -o StrictHostKeyChecking=no \
-          //                ${ANSIBLE_USER}@${ANSIBLE_HOST} \
-           //               "cd ${REMOTE_DIR} && \
-           //                ansible-playbook \
-          //                 -i ansible/inventory/production.ini \
-           //                ansible/playbooks/pre_patch.yml \
-           //                --syntax-check"
-           //         """
-         //       }
-        //    }
-        
-        // ==============================================
-        // 3. ANSIBLE SYNTAX CHECK FOR PATCH
-        // ==============================================
+                    sh """
 
-       //    steps {
+                        ssh \
+                          -o StrictHostKeyChecking=no \
+                          ${ANSIBLE_USER}@${ANSIBLE_HOST} \
+                          "cd ${REMOTE_DIR} && \
+                           ansible-playbook \
+                           -i ansible/inventory/production.ini \
+                           ansible/playbooks/patch.yml \
+                           --syntax-check"
+                    """
+                }
+            }
+        }
 
-        //        sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
 
-      //              sh """
-
-     //                   ssh \
-     //                     -o StrictHostKeyChecking=no \
-    //                      ${ANSIBLE_USER}@${ANSIBLE_HOST} \
-    //                      "cd ${REMOTE_DIR} && \
-    //                       ansible-playbook \
-    //                       -i ansible/inventory/production.ini \
-   //                        ansible/playbooks/patch.yml \
-  //                         --syntax-check"
-   //                 """
-    //            }
-    //        }
-   //     }
         // ==============================================
         // 4. PRE-CHECK
         // ==============================================
 
-    //    stage('Pre-Check') {
+        stage('Pre-Check') {
 
-   //         steps {
+            steps {
 
-   //             sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+                sshagent(credentials: ['ansible-vm-ssh']) {
 
-    //                sh """
+                    sh """
 
-    //                    ssh \
-   //                       -o StrictHostKeyChecking=no \
-    //                      ${ANSIBLE_USER}@${ANSIBLE_HOST} \
-    //                      "cd ${REMOTE_DIR} && \
-     //                      ansible \
-     //                      -i ansible/inventory/production.ini \
-     //                      ${TARGET} \
-      //                     -m ping"
-     //               """
-     //           }
-     //       }
+                        ssh \
+                          -o StrictHostKeyChecking=no \
+                          ${ANSIBLE_USER}@${ANSIBLE_HOST} \
+                          "cd ${REMOTE_DIR} && \
+                           ansible \
+                           -i ansible/inventory/production.ini \
+                           ${TARGET} \
+                           -m ping"
+                    """
+                }
+            }
+        }
 
-     //       steps {
-    //            sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
-
-   //                 sh """
-
-     //                   ssh \
-      //                    -o StrictHostKeyChecking=no \
-       //                   ${ANSIBLE_USER}@${ANSIBLE_HOST} \
-    //                      "cd ${REMOTE_DIR} && \
-     //                      ansible-playbook \
-     //                      -i ansible/inventory/production.ini \
-     //                      ansible/playbooks/pre_patch.yml \
-     //                      --limit ${TARGET}"
-                           
-   //                 """
-   //             }
-    //        }   
-    //    }
 
         // ==============================================
         // 5. APPROVAL
         // ==============================================
 
-     //   stage('Approval') {
+        stage('Approval') {
 
-    //        when {
-   //             expression {
-   //                 params.PRODUCTION_APPROVAL
-   //             }
-   //         }
+            when {
+                expression {
+                    params.PRODUCTION_APPROVAL
+                }
+            }
 
-    //        steps {
+            steps {
 
-    //            input(
-    //                message: "Proceed with Linux patching for ${TARGET}?",
-    //                ok: "Patch Linux Servers"
-   //             )
-   //         }
-   //     }
+                input(
+                    message: "Proceed with Linux patching for ${TARGET}?",
+                    ok: "Patch Linux Servers"
+                )
+            }
+        }
+
 
         // ==============================================
         // 6. PATCH
         // ==============================================
 
-   //     stage('Linux Patching') {
+        stage('Linux Patching') {
 
-   //         steps {
+            steps {
 
-    //            sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+                sshagent(credentials: ['ansible-vm-ssh']) {
 
-     //               sh """
-//
-    //                    ssh \
-    //                      -o StrictHostKeyChecking=no \
-    //                      ${ANSIBLE_USER}@${ANSIBLE_HOST} \
-    //                      "cd ${REMOTE_DIR} && \
-    //                       ansible-playbook \
-    //                       -i ansible/inventory/production.ini \
-    //                       ansible/playbooks/patch.yml \
-    //                       --limit ${TARGET}"
-    //                """
-    //            }
-    //        }
-    //    }
-    
-    //post {
+                    sh """
 
-       // success {
+                        ssh \
+                          -o StrictHostKeyChecking=no \
+                          ${ANSIBLE_USER}@${ANSIBLE_HOST} \
+                          "cd ${REMOTE_DIR} && \
+                           ansible-playbook \
+                           -i ansible/inventory/production.ini \
+                           ansible/playbooks/patch.yml \
+                           --limit ${TARGET}"
+                    """
+                }
+            }
+        }
+    }
 
-        //    echo '''
-       //     ==========================================
-      //      LINUX PATCHING SUCCESSFUL
-      //      ==========================================
-       //     '''
-     //   }
 
-     //   failure {
+    post {
 
-    //        echo '''
-    //        ==========================================
-   //         LINUX PATCHING FAILED
-   //         ==========================================
-   //         '''
-  //      }
-//
-  //      always {
+        success {
 
-  //          echo "Target: ${TARGET}"
-  //          echo "Ansible VM: ${ANSIBLE_HOST}"
-   //     }
- //   }
-//}
+            echo '''
+            ==========================================
+            LINUX PATCHING SUCCESSFUL
+            ==========================================
+            '''
+        }
+
+        failure {
+
+            echo '''
+            ==========================================
+            LINUX PATCHING FAILED
+            ==========================================
+            '''
+        }
+
+        always {
+
+            echo "Target: ${TARGET}"
+            echo "Ansible VM: ${ANSIBLE_HOST}"
+        }
+    }
+}
