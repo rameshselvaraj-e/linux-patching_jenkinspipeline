@@ -8,8 +8,7 @@ pipeline {
             name: 'TARGET',
             choices: [
                 'linux_servers',
-                'server01',
-                'server02'
+                'server01'
             ],
             description: 'Select Linux servers/group to patch'
         )
@@ -23,10 +22,9 @@ pipeline {
 
     environment {
 
-        ANSIBLE_HOST = '10.10.10.20'
-        ANSIBLE_USER = 'ansible'
-
-        REMOTE_DIR = '/opt/ansible/linux-patching'
+        ANSIBLE_HOST = '10.0.10.10'
+        ANSIBLE_USER = 'itadmin'
+        REMOTE_DIR = '/data/linux-patching_jenkinspipeline1'
     }
 
     stages {
@@ -64,7 +62,7 @@ pipeline {
 
             steps {
 
-                sshagent(credentials: ['ansible-vm-ssh']) {
+                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
 
                     sh """
 
@@ -73,11 +71,8 @@ pipeline {
                           ${ANSIBLE_USER}@${ANSIBLE_HOST} \
                           "mkdir -p ${REMOTE_DIR}"
 
-                        rsync -av \
-                          --delete \
-                          --exclude='.git' \
-                          ./ \
-                          ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
+                        scp \
+                            -o StrictHostKeyChecking=no -r ./ansible ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
                     """
                 }
             }
@@ -92,7 +87,7 @@ pipeline {
 
             steps {
 
-                sshagent(credentials: ['ansible-vm-ssh']) {
+                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
 
                     sh """
 
@@ -118,7 +113,7 @@ pipeline {
 
             steps {
 
-                sshagent(credentials: ['ansible-vm-ssh']) {
+                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
 
                     sh """
 
@@ -166,7 +161,7 @@ pipeline {
 
             steps {
 
-                sshagent(credentials: ['ansible-vm-ssh']) {
+                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
 
                     sh """
 
