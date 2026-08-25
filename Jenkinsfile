@@ -16,7 +16,7 @@ pipeline {
   environment {
         ANSIBLE_HOST = '10.0.10.10'
         ANSIBLE_USER = 'itadmin'
-        REMOTE_DIR = '/data/linux-patching_jenkinspipeline'
+        REMOTE_DIR = '/data/linux-patching_jenkinspipeline1'
     }
 
   stages {
@@ -49,28 +49,27 @@ pipeline {
         // 2. COPY CODE TO ANSIBLE VM
         // ==============================================
 
-        //stage('Deploy Ansible Code') {
+        stage('Deploy Ansible Code') {
 
-          //  steps {
+           steps {
 
-            //    sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+              sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
 
-              //      sh """
+                sh """
+                  ssh \
+                     -o StrictHostKeyChecking=no \
+                         ${ANSIBLE_USER}@${ANSIBLE_HOST} \
+                         "mkdir -p ${REMOTE_DIR}"
 
-                //        ssh \
-                //          -o StrictHostKeyChecking=no \
-               //          ${ANSIBLE_USER}@${ANSIBLE_HOST} \
-               //           "mkdir -p ${REMOTE_DIR}"
-
-                //        rsync -av \
-                //          --delete \
-                //          --exclude='.git' \
-                //          ./ \
-                //          ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
-                 //   """
-               // }
-           // }
-       // }
+                       rsync -av \
+                         --delete \
+                         --exclude='.git' \
+                         ./ \
+                         ${ANSIBLE_USER}@${ANSIBLE_HOST}:${REMOTE_DIR}/
+                    """
+                }
+            }
+        }
 
         // ==============================================
         // 3. ANSIBLE SYNTAX CHECK
