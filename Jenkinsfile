@@ -130,7 +130,31 @@ pipeline {
             }
         }
 
+        // ==============================================
+        // 5. PRE-CHECK - Collect System info
+        // ==============================================
 
+        stage('Pre-Check-Sysinfo') {
+
+            steps {
+
+                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+
+                    sh """
+
+                        ssh \
+                          -o StrictHostKeyChecking=no \
+                          ${ANSIBLE_USER}@${ANSIBLE_HOST} \
+                          "cd ${REMOTE_DIR} && \
+                           ansible-playbook \
+                           -i ansible/inventory/production.ini \
+                           ansible/playbooks/pre_patch.yml \
+                           --limit ${TARGET} 
+                    """
+                }
+            }
+        }
+       
         // ==============================================
         // 5. APPROVAL
         // ==============================================
