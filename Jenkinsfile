@@ -82,7 +82,7 @@ pipeline {
         // 3. ANSIBLE SYNTAX CHECK FOR PRE_PATCH
         // ==============================================
 
-        stage('Ansible Syntax Check') {
+        stage('Ansible Syntax Check for pre_patch') {
 
             steps {
 
@@ -107,7 +107,7 @@ pipeline {
         // 4. ANSIBLE SYNTAX CHECK FOR PATCH
         // ==============================================
 
-        stage('Ansible Syntax Check') {
+        stage('Ansible Syntax Check for patch') {
 
             steps {
 
