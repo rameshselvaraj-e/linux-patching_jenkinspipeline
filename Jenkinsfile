@@ -62,7 +62,7 @@ pipeline {
 
             steps {
 
-                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+                sshagent(credentials: ['jenkins-to-ansible']) {
 
                     sh """
 
@@ -87,7 +87,7 @@ pipeline {
 
             steps {
 
-                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+                sshagent(credentials: ['jenkins-to-ansible']) {
 
                     sh """
 
@@ -113,7 +113,7 @@ pipeline {
 
             steps {
 
-                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+                sshagent(credentials: ['jenkins-to-ansible']) {
 
                     sh """
 
@@ -138,7 +138,7 @@ pipeline {
 
         //    steps {
 
-      //          sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+      //          sshagent(credentials: ['jenkins-to-ansible']) {
 
       //              sh """
 
@@ -185,7 +185,7 @@ pipeline {
 
             steps {
 
-                sshagent(credentials: ['esrjenkins-esrittool-ansible-ssh']) {
+                sshagent(credentials: ['jenkins-to-ansible']) {
 
                     sh """
 
