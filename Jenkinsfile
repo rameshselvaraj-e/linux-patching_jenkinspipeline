@@ -130,7 +130,7 @@ pipeline {
 
 
         // ==============================================
-        // 4. PRE-CHECK
+        // 5. PRE-CHECK
         // ==============================================
 
         stage('Pre-Check') {
@@ -155,7 +155,7 @@ pipeline {
         }
 
         // ==============================================
-        // 5. PRE-CHECK - Collect System info
+        // 6. PRE-CHECK - Collect System info
         // ==============================================
 
         stage('Pre-Check-Sysinfo') {
@@ -169,14 +169,14 @@ pipeline {
                     ansible-playbook \
                     -i ansible/inventory/production.ini \
                     ansible/playbooks/pre_patch.yml \
-                    --limit ${TARGET} 
+                    --limit ${TARGET}"
                     """
                 }
             }
         }
        
         // ==============================================
-        // 5. APPROVAL
+        // 7. APPROVAL
         // ==============================================
 
         stage('Approval') {
@@ -198,7 +198,7 @@ pipeline {
 
 
         // ==============================================
-        // 6. PATCH
+        // 8. PATCH
         // ==============================================
 
         stage('Linux Patching') {
