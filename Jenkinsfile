@@ -135,21 +135,17 @@ pipeline {
         // ==============================================
 
         stage('Pre-Check-Sysinfo') {
-
             steps {
-
                 sshagent(credentials: ['jenkins-to-ansible']) {
-
                     sh """
-
-                        ssh \
-                          -o StrictHostKeyChecking=no \
-                          ${ANSIBLE_USER}@${ANSIBLE_HOST} \
-                          "cd ${REMOTE_DIR} && \
-                           ansible-playbook \
-                           -i ansible/inventory/production.ini \
-                           ansible/playbooks/pre_patch.yml \
-                           --limit ${TARGET} 
+                    ssh \
+                    -o StrictHostKeyChecking=no \
+                    ${ANSIBLE_USER}@${ANSIBLE_HOST} \
+                    "cd ${REMOTE_DIR} && \
+                    ansible-playbook \
+                    -i ansible/inventory/production.ini \
+                    ansible/playbooks/pre_patch.yml \
+                    --limit ${TARGET} 
                     """
                 }
             }
