@@ -78,9 +78,33 @@ pipeline {
             }
         }
 
+        // ==============================================
+        // 3. ANSIBLE SYNTAX CHECK FOR PRE_PATCH
+        // ==============================================
+
+        stage('Ansible Syntax Check') {
+
+            steps {
+
+                sshagent(credentials: ['jenkins-to-ansible']) {
+
+                    sh """
+
+                        ssh \
+                          -o StrictHostKeyChecking=no \
+                          ${ANSIBLE_USER}@${ANSIBLE_HOST} \
+                          "cd ${REMOTE_DIR} && \
+                           ansible-playbook \
+                           -i ansible/inventory/production.ini \
+                           ansible/playbooks/pre_patch.yml \
+                           --syntax-check"
+                    """
+                }
+            }
+        }
 
         // ==============================================
-        // 3. ANSIBLE SYNTAX CHECK
+        // 4. ANSIBLE SYNTAX CHECK FOR PATCH
         // ==============================================
 
         stage('Ansible Syntax Check') {
